@@ -127,18 +127,45 @@ class EvacuationPolicy:
         # TODO: Implementa tu solución aquí
         # Aquí deberías cargar y analizar datos de simulaciones previas
         # Función naive para definir pesos básicos penalizando caminos peligrosos
-        for u, v in city.graph.edges():
+           # Función naive para definir pesos básicos penalizando caminos peligrosos
+        def edge_weight(u, v):
             edge_info = proxy_data.edge_data.get((u, v), {})
-            weight = 1 + edge_info.get("debris_density", 0) + edge_info.get("structural_damage", 0) + edge_info.get("hazard_gradient", 0)
-            city.graph[u][v]['weight'] = weight
+            return 1 + edge_info.get("debris_density", 0) + edge_info.get("structural_damage", 0) + edge_info.get("hazard_gradient", 0)
+        
+        for u, v in city.graph.edges():
+            city.graph[u][v]['weight'] = edge_weight(u, v)
 
-        # Seleccionar el nodo de extracción más cercano
-        try:
-            target = min(city.extraction_nodes, key=lambda node: nx.shortest_path_length(city.graph, city.starting_node, node, weight='weight'))
-            best_path = nx.shortest_path(city.graph, city.starting_node, target, weight='weight')
-        except nx.NetworkXNoPath:
+        # Intentar encontrar la mejor ruta considerando bloqueos
+        best_path = None
+        best_cost = float("inf")
+        for target in city.extraction_nodes:
+            try:
+                path = nx.shortest_path(city.graph, city.starting_node, target, weight='weight')
+                cost = sum(city.graph[u][v]["weight"] for u, v in zip(path, path[1:]))
+                if cost < best_cost:
+                    best_path = path
+                    best_cost = cost
+            except nx.NetworkXNoPath:
+                continue
+        
+        if best_path is None:
             best_path = [city.starting_node]  # No hay ruta segura
         
+        # Comprobar si la ruta excede los recursos y encontrar alternativa si es necesario
+        for i in range(len(best_path) - 1):
+            u, v = best_path[i], best_path[i + 1]
+            edge_info = proxy_data.edge_data.get((u, v), {})
+            
+            if edge_info.get("structural_damage", 0) > max_resources / 2 or edge_info.get("debris_density", 0) > max_resources / 2:
+                # Encontrar ruta alternativa excluyendo la actual
+                city.graph.remove_edge(u, v)
+                try:
+                    alternative_path = nx.shortest_path(city.graph, city.starting_node, target, weight='weight')
+                    best_path = alternative_path
+                except nx.NetworkXNoPath:
+                    pass  # Si no hay ruta alternativa, mantener la original
+                city.graph.add_edge(u, v, weight=edge_weight(u, v))  # Restaurar conexión
+
         # Distribución naive de recursos basada en peligros detectados
         total_debris = sum(proxy_data.edge_data.get((u, v), {}).get("debris_density", 0) for u, v in zip(best_path, best_path[1:]))
         total_population = sum(proxy_data.node_data.get(n, {}).get("population_density", 0) for n in best_path)
@@ -153,6 +180,7 @@ class EvacuationPolicy:
         }
         
         return PolicyResult(best_path, resources)
+
    
     def _policy_4(self, city: CityGraph, proxy_data: ProxyData, max_resources: int) -> PolicyResult:
         """
