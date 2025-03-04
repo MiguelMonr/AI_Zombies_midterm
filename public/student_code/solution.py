@@ -1,6 +1,6 @@
 import sys
 import os
-
+import pandas as pd
 # Agregar manualmente la ruta del directorio raíz del proyecto
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 import networkx as nx
@@ -11,12 +11,22 @@ from public.student_code.convert_to_df import convert_edge_data_to_df, convert_n
 
 class EvacuationPolicy:
     def __init__(self):
-        self.policy_type = "policy_2"
-
+        self.policy_type = "policy_3" #Este es el que hay que correr y modificar 
+        
+    
+    #! No modificar el metodo set policy 
     def set_policy(self, policy_type: Literal["policy_1", "policy_2", "policy_3", "policy_4"]):
         self.policy_type = policy_type
 
     def plan_evacuation(self, city: CityGraph, proxy_data: ProxyData, max_resources: int) -> PolicyResult:
+        # print(f'City graph: {city.graph} \n')
+        # print(f'City starting_node: {city.starting_node}\n')
+        # print(f'City extraction_nodes: {city.extraction_nodes}\n')
+        # print(f'Proxy node_data: {proxy_data.node_data} \n \n')
+        # print(f'Proxy edge_data: {proxy_data.edge_data} \n \n')
+        # print(f'Max Resources: {max_resources} \n \n')
+        
+        
         if self.policy_type == "policy_1":
             return self._policy_1(city, max_resources)
         elif self.policy_type == "policy_2":
@@ -103,42 +113,75 @@ class EvacuationPolicy:
 
         return PolicyResult(path, resources)
 
+    # * Modifcar para analizar los proxys 
     def _policy_3(self, city: CityGraph, proxy_data: ProxyData, max_resources: int) -> PolicyResult:
         """
-        Política 3: Uso de datos históricos para tomar decisiones
-        - Se analiza el success rate de misiones previas.
-        - Se ajusta la estrategia con base en tendencias observadas.
+        Política 3: Estrategia usando datos de simulaciones previas.
+        Utiliza estadísticas básicas de simulaciones anteriores para mejorar la toma de decisiones.
+        
+        Esta política debe:
+        - Utilizar datos de simulaciones previas
+        - Implementar mejoras basadas en estadísticas básicas
+        - NO usar modelos de machine learning
         """
-        past_data = getattr(proxy_data, "historical_data", {})
+        # TODO: Implementa tu solución aquí
+        # Aquí deberías cargar y analizar datos de simulaciones previas
+        # Función naive para definir pesos básicos penalizando caminos peligrosos
+           # Función naive para definir pesos básicos penalizando caminos peligrosos
+        def edge_weight(u, v):
+            edge_info = proxy_data.edge_data.get((u, v), {})
+            return 1 + edge_info.get("debris_density", 0) + edge_info.get("structural_damage", 0) + edge_info.get("hazard_gradient", 0)
+        
+        for u, v in city.graph.edges():
+            city.graph[u][v]['weight'] = edge_weight(u, v)
 
-        if not past_data:
-            print("⚠️ No se encontraron datos históricos, usando solo el grafo base.")
-            return self._policy_1(city, max_resources)
+        # Intentar encontrar la mejor ruta considerando bloqueos
+        best_path = None
+        best_cost = float("inf")
+        for target in city.extraction_nodes:
+            try:
+                path = nx.shortest_path(city.graph, city.starting_node, target, weight='weight')
+                cost = sum(city.graph[u][v]["weight"] for u, v in zip(path, path[1:]))
+                if cost < best_cost:
+                    best_path = path
+                    best_cost = cost
+            except nx.NetworkXNoPath:
+                continue
+        
+        if best_path is None:
+            best_path = [city.starting_node]  # No hay ruta segura
+        
+        # Comprobar si la ruta excede los recursos y encontrar alternativa si es necesario
+        for i in range(len(best_path) - 1):
+            u, v = best_path[i], best_path[i + 1]
+            edge_info = proxy_data.edge_data.get((u, v), {})
+            
+            if edge_info.get("structural_damage", 0) > max_resources / 2 or edge_info.get("debris_density", 0) > max_resources / 2:
+                # Encontrar ruta alternativa excluyendo la actual
+                city.graph.remove_edge(u, v)
+                try:
+                    alternative_path = nx.shortest_path(city.graph, city.starting_node, target, weight='weight')
+                    best_path = alternative_path
+                except nx.NetworkXNoPath:
+                    pass  # Si no hay ruta alternativa, mantener la original
+                city.graph.add_edge(u, v, weight=edge_weight(u, v))  # Restaurar conexión
 
-        edge_success_rates = {
-            edge: past_data.get(edge, {}).get('success_rate', 1) for edge in city.graph.edges
-        }
-
-        def weight_function(u, v, edge_attrs):
-            base_weight = edge_attrs.get('weight', 1)
-            success_factor = edge_success_rates.get((u, v), 1)
-            return base_weight * (2 - success_factor)
-
-        target = min(city.extraction_nodes, key=lambda node: nx.shortest_path_length(city.graph, city.starting_node, node, weight='weight'))
-
-        try:
-            path = nx.shortest_path(city.graph, city.starting_node, target, weight=lambda u, v, d: weight_function(u, v, d))
-        except nx.NetworkXNoPath:
-            path = [city.starting_node]
-
+        # Distribución naive de recursos basada en peligros detectados
+        total_debris = sum(proxy_data.edge_data.get((u, v), {}).get("debris_density", 0) for u, v in zip(best_path, best_path[1:]))
+        total_population = sum(proxy_data.node_data.get(n, {}).get("population_density", 0) for n in best_path)
+        
+        explosives_needed = int(total_debris * (max_resources / 4))
+        ammo_needed = int(total_population * (max_resources / 4))
+        
         resources = {
-            'explosives': max_resources // 5,
-            'ammo': max_resources // 2,
-            'radiation_suits': max_resources // 3
+            'explosives': min(explosives_needed, max_resources // 2),
+            'ammo': min(ammo_needed, max_resources // 2),
+            'radiation_suits': max_resources - (explosives_needed + ammo_needed)
         }
+        
+        return PolicyResult(best_path, resources)
 
-        return PolicyResult(path, resources)
-
+   
     def _policy_4(self, city: CityGraph, proxy_data: ProxyData, max_resources: int) -> PolicyResult:
         """
         Política 4: Simulación extrema sin moral.
