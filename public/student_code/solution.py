@@ -8,10 +8,10 @@ import random
 from typing import Dict, List, Literal
 from public.lib.interfaces import CityGraph, ProxyData, PolicyResult
 from public.student_code.convert_to_df import convert_edge_data_to_df, convert_node_data_to_df
-
+import math
 class EvacuationPolicy:
     def __init__(self):
-        self.policy_type = "policy_3" #Este es el que hay que correr y modificar 
+        self.policy_type = "policy_4" #Este es el que hay que correr y modificar 
         
     
     #! No modificar el metodo set policy 
@@ -181,23 +181,88 @@ class EvacuationPolicy:
         
         return PolicyResult(best_path, resources)
 
-   
+
     def _policy_4(self, city: CityGraph, proxy_data: ProxyData, max_resources: int) -> PolicyResult:
         """
-        Política 4: Simulación extrema sin moral.
-        - Se envían equipos sin recursos para recopilar datos.
-        - Se maximizan las pruebas para entender el entorno.
+        Política 4 mejorada para incrementar la tasa de éxito:
+        - Usa BFS con penalización, permitiendo rutas de riesgo moderado.
+        - Ajusta la asignación de recursos de manera granular según las condiciones.
+        - Ofrece fallback si no halla ruta al primer intento.
+        (Sin usar math)
         """
-        target = random.choice(city.extraction_nodes)
+        from collections import deque
 
-        try:
-            path = nx.shortest_path(city.graph, city.starting_node, target, weight='weight')
-        except nx.NetworkXNoPath:
+        def bfs_path(start: int, extraction_nodes: List[int], threshold: float) -> List[int]:
+            """
+            threshold: máximo 'peligro' permitido en cada arista antes de descartarla por completo.
+            """
+            queue = deque([[start]])
+            visited = set()
+            best_path = None
+
+            while queue:
+                path = queue.popleft()
+                node = path[-1]
+
+                if node in visited:
+                    continue
+                visited.add(node)
+
+                if node in extraction_nodes:
+                    best_path = path
+                    break
+
+                for neighbor in city.graph.neighbors(node):
+                    edge_info = proxy_data.edge_data.get((node, neighbor), {})
+                    # Calcular un 'peligro' simple en la arista
+                    danger = (edge_info.get("structural_damage", 0) +
+                            edge_info.get("debris_density", 0))
+                    # Permitir rutas con 'peligro' menor al threshold
+                    if danger <= threshold:
+                        queue.append(path + [neighbor])
+
+            return best_path if best_path else []
+
+        # Primer intento con un threshold estricto
+        path = bfs_path(city.starting_node, city.extraction_nodes, threshold=0.8)
+        # Fallback si no se encontró ruta
+        if not path:
+            path = bfs_path(city.starting_node, city.extraction_nodes, threshold=1.0)
+        # Si de plano no hay ruta, quedarse en el inicio
+        if not path:
             path = [city.starting_node]
 
-        resources = {'explosives': 0, 'ammo': 0, 'radiation_suits': 0}
+        # Ajustar recursos de manera granular
+        total_debris = sum(proxy_data.edge_data.get((u, v), {}).get("debris_density", 0)
+                        for u, v in zip(path, path[1:]))
+        total_damage = sum(proxy_data.edge_data.get((u, v), {}).get("structural_damage", 0)
+                        for u, v in zip(path, path[1:]))
+        total_population = sum(proxy_data.node_data.get(n, {}).get("population_density", 0)
+                            for n in path)
+        total_radiation = sum(proxy_data.node_data.get(n, {}).get("radiation_readings", 0)
+                            for n in path)
+
+        # Explosivos según escombros + daño
+        explosives_needed = int((total_debris + total_damage) * 2 + 0.9999)
+        # Ammo según población
+        ammo_needed = int(total_population * 2 + 0.9999)
+        # Trajes según radiación promedio
+        radiation_avg = total_radiation / max(1, len(path))
+        suits_needed = int(radiation_avg * 4 + 0.9999)
+        # Ensure suits_needed is used
+        allocated_suits = min(suits_needed, max_resources // 2)
+
+        # Ajustar sin exceder max_resources
+        allocated_explosives = min(explosives_needed, max_resources // 2)
+        allocated_ammo = min(ammo_needed, max_resources // 2)
+        leftover = max_resources - (allocated_explosives + allocated_ammo)
+        allocated_suits = min(max(leftover, 0), max_resources // 2)
+
+        resources = {
+            'explosives': allocated_explosives,
+            'ammo': allocated_ammo,
+            'radiation_suits': allocated_suits
+        }
 
         return PolicyResult(path, resources)
 
-    
-    
