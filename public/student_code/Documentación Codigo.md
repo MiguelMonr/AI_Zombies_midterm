@@ -1,3 +1,9 @@
+Integranes: 
+- Miguel Monreal 196891
+- Ana Lucía Martínez Morales 213792
+- Sofía Jiménez 213089
+-  Mario Guillén 212769
+
 # Política 1: Los primeros días
 
 Ya que se cuenta con la información de la estructura de la Ciudad, se implementa **A*** para plantear el posible camino óptimo cuyo resultado sea una extracción. En caso de que el camino no exista, se dan **0 recursos**, con el fin de empezar a acumular información.
