@@ -21,7 +21,7 @@ Al no tener información, **asignamos recursos aleatorios**.
 
 # Política 2: Estableciendo la Red de Monitoreo
 
-> **OJO**: Implementación, compilación y covarianza.
+
 
 Dado el **proxy de actividad sísmica**, se implementará que:
 - Si la actividad sísmica es de **0.75** y se tienen **menos de 2 explosivos**, se escoge el siguiente camino más corto, pero **que no pase por ahí**.
