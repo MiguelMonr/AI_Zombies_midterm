@@ -70,42 +70,36 @@ Al no tener información, **asignamos recursos aleatorios**.
 
 # Política 3: Aprendiendo de la Experiencia
 
-- **Mayor relación con valor absoluto**.
-- **Gradiente de peligro creado**.
+A partir de esta policy ya se nos es permitido tomar en cuenta la información que se ha acumulado durante esta época de crisis, eso incluye información de las simulaciones pasadas. Es decir, ya tenemos más datos a nuestra disposición.
 
-### Para P1: Menor gradiente de peligro. ¿Qué pasó?
-- Se suman los valores y aquellos negativos **se suman al revés**.
-- **Se asignan los recursos con esa distribución**.
+Para esta policy buscamos una relación entre los proxys que se nos fueron otorgados durante la policy 2, es así que se establece una penalización a la arista en donde se encuentren ciertos “datos” (los los escombros, la densidad poblacional, etc.), dándole un mayor peso y así evitando esa ruta completamente. Es así que para llegar al nodo deseado usamos Djikstra, pero este corre bajo las penalizaciones dadas a los nodos, considerando sus nuevos pesos y calculando una ruta segura y lo más rápida posible. 
 
-Tomando en cuenta el **success rate** de las misiones previas:
-- Se identifican las condiciones de las misiones con el **success rate** más alto.
-- Usando **regresión lineal**, se estudia el número de recursos utilizados y su cercanía con el nodo al que se quería llegar, para identificar **qué tan relevantes son los recursos**.
-- Se analiza cada uno de los recursos por separado, así como en conjunto.
-- También se analizará el resultado de seguir los **proxys** cuando los recursos se suponían suficientes para sobrellevar la situación y se comparará con el resultado de evitar dicho nodo.
+Además, considera los recursos que se tienen a disposición, es decir, que si no se disponen de los recursos suficientes y considerando las relaciones dadas anteriormente, es capaz de elegir otra ruta que se adapte a las necesidades. Adicionalmente, estos recursos son seleccionados en relación con la cantidad de escombros o población en la ruta
 
-### Desventajas:
-- Se puede estar usando un **dato estadístico inadecuado**.
-- Puede ser **demasiado rígido** para capturar relaciones complejas entre variables.
-- Podría tomar **patrones irrelevantes** y no tendencias generales.
 
-### Ventajas:
-- Proporciona un **método cuantitativo y cualitativo** para tomar decisiones.
-- Ayuda a **entender patrones** y factores que pueden conducir al éxito.
-- Evita el **desprecio de productos**.
 
-### Análisis de la política desde la perspectiva de probabilidad de Jaynes y su robot:
-- **Uso de toda la información**:
-  - La inicial, usando el **layout** de la ciudad.
-  - La relacionada con los **proxys**.
-  - La información recopilada de **todas las misiones previas**.
-- Enfoque **estadístico y basado en datos**.
+# Ventajas: El actualizar los pesos de las aristas es aprovechar toda la información dada de manera previa, penalizando rutas peligrosas y ayudando a la flexibilidad de asignación de recursos, además, considera rutas alternativas siempre que esa asignación no sea adecuada para la ruta considerada inicialmente.
+# Desventajas: Depende de la calidad de datos recopilados anteriormente, no garantiza una ruta óptima al usar heurísticas para seleccionar rutas alternativas
+
+Análisis de la política desde la perspectiva de probabilidad de Jaynes y su robot.
+
+Uso de toda la información, la inicial usando el layout de la ciudad, la que se relaciona con la proxy, y, finalmente, la información recopilada de todas las misiones previas
+Enfoque estadístico y basado en datos
 
 ---
 
 # Política 4: Simulación de Entrenamiento
 
-En este caso **no tenemos moral ni consecuencias**, sólo buscamos **optimizar y aprender**. 
+Esta vez se usa BFS para conocer los caminos a los nodos de extracción, sin embargo, también introduce un umbral que, en caso de ser excedido, fuerza a buscar una ruta alternativa, descartando las aristas con un umbral demasiado alto. 
+Asimismo, se calcula la cantidad de escombros, población y radiación en esas rutas para seleccionar de manera proporcional los recursos disponibles
 
-Es por ello que la mejor manera de optimizar es **mandar a la mayor cantidad de personas, sin recursos**, para aprender cómo funciona este nuevo mundo postapocalíptico y saber qué esperar de cada nodo. 
+# Ventajas: 
+Permite explorar rutas con riesgo moderado, y si no puede encontrar una con ese nivel busca uno con un umbral intermedio, buscando siempre la mejor ruta posible. Los umbrales facilitan la adaptación a nuevos escenarios.
+# Desventajas: 
+También depende de la calidad de los datos recopilados con anterioridad.
 
-Esto nos ayudará a saber **cómo y cuántos recursos llevar** dependiendo de este nuevo conocimiento que surgió gracias al **sacrificio de miles de ciudadanos inocentes** (**RIP**).
+
+Análisis de la política desde la perspectiva de probabilidad de Jaynes y su robot.
+Usa umbrales para decidir si conviene o no tomar una ruta, es decir, utiliza números reales y valores numéricos para tomar decisiones
+Es consistente, ya que sigue un sistema que le asigna valores a los umbrales de manera lógica, usando siempre las mismas reglas
+
